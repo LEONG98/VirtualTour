@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="shortcut icon" href="image/favicon.png">
+    <link rel="stylesheet" href="css/app.css">
+    <title>VIRTUALTOUR</title>
+    <style>
+        #leaderboard {
+            display: grid;
+            border-collapse: collapse;
+            margin: auto;
+            width: 30%;
+            padding: 10px;
+        }
+
+        th {
+            background:lightblue;
+        }
+
+        th, td {
+            border: 1px solid black;
+            width: 200px;
+            height: 25px;
+            padding-left: 5px;
+        }
+
+        #score {
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1><a href="index.html">Leaderboard</a></h1>
+    </header>
+    <nav>
+        <a href="index.html">Homepage</a>
+        <a href="game.html">Virtual Tour</a>
+        <a href="addPlace.html">Add Place</a>
+    </nav>
+    <main id="app" v-cloak>
+        <table id="leaderboard">
+            <tr>
+                <th>Name</th>
+                <th>Step Taken</th>
+            </tr>
+            <tr v-for="s of scores">
+                <td>{{ s.name }}</td>
+                <td id="score">{{ s.score }}</td>
+            </tr>
+        </table>
+    </main>
+    <script src="https://www.gstatic.com/firebasejs/7.17.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/7.17.1/firebase-firestore.js"></script>
+    <script src="js/jquery.slim.js"></script>
+    <script src="js/vue.js"></script>
+    <script src="js/app.js"></script>
+    <script>
+        firebase.initializeApp({
+            projectId: 'wailong-demo'
+        })
+
+        const ref = firebase.firestore().collection('score').orderBy('score');
+
+        const vm = new Vue({
+            el: '#app',
+            data: {
+                scores: []
+            },
+            created(){
+                ref.get().then(querySnapshot => {
+                    const documents = querySnapshot.docs.map(doc => doc.data())
+
+                    vm.scores = documents;
+                })
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="shortcut icon" href="image/favicon.png">
+    <link rel="stylesheet" href="css/app.css">
+    <title>VIRTUALTOUR</title>
+    <style> 
+        main {
+            display: grid;
+        }
+        
+        #map {
+            border: 1px solid #333;
+        }
+
+        #panel {
+            background-color: #fff;
+            border: 1px solid #999;
+            border-radius: 5px;
+            margin: 5px;
+            padding: 5px;
+            font-size: 16px;
+        }
+
+        #panel img {
+            width: 24px;
+        }
+
+        #panel * {
+            vertical-align: middle;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1><a href="index.html">VirtualTouring</a></h1>
+    </header>
+
+    <nav>
+        <a href="index.html">Homepage</a>
+        <a href="scoreboard.html">Leaderboard</a>
+    </nav>
+
+    <!-- Vue ----------------------------------------------------------------->
+    <main id="app" v-cloak>
+        <div id="map"></div>
+        
+        <div hidden>
+            <div id="panel">
+                <div v-for="m of markers">
+                    <img :src="m.icon">
+                    <b>{{ m.label }}</b>
+                    <span v-if="m.found">Found</span>
+                    <span v-else>{{ m.distance | number(0) }} meters</span>
+                </div>
+            </div>
+        </div>
+    </main>
+    <script src="https://www.gstatic.com/firebasejs/7.17.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/7.17.1/firebase-firestore.js"></script>
+    <script src="https://maps.googleapis.com/maps/api/js?key=&libraries=geometry"></script>
+    <script src="js/jquery.slim.js"></script>
+    <script src="js/vue.js"></script>
+    <script src="js/app.js"></script>
+    <script>
+        firebase.initializeApp({
+            projectId: 'wailong-demo'
+        })
+
+        const ref = firebase.firestore().collection('streets');
+
+        const refScore = firebase.firestore().collection('score');
+
+        // ====================================================================
+        // Vue
+        // ====================================================================
+        
+        //Action Sound Effect
+        const audio1 = new Audio('audio/A1.mp3');
+        const audio2 = new Audio('audio/A2.mp3');
+
+        //Background music
+        const back1 = new Audio(`audio/B${Math.floor(Math.random() * 2 + 1)}.mp3`);
+        back1.volume = 0.2;
+
+        //Character movement speed
+        var speed = 5;
+
+        back1.loop = true;
+        back1.play();
+
+        const vm = new Vue({
+            el: '#app',
+            data: {
+                mks: [],
+                markers: [],
+                win: false,
+                step: 0
+            },
+            methods: {
+                move(x, y) {
+                    let c1 = map.getCenter();
+                    map.panBy(x * speed, y * speed);
+                    let c2 = map.getCenter();
+
+                    if(bounds.contains(c2)){
+                        player.setPosition(c2);
+                    }
+                    else{
+                        map.setCenter(c1);
+                    }
+
+                    for (let m of vm.markers.filter(m => !m.found)) {
+                        let a = player.getPosition();
+                        let b = m.getPosition();
+                        m.distance = gm.geometry.spherical.computeDistanceBetween(a, b);
+
+                        if (m.distance < 10){
+                            audio1.play();
+                            m.found = true;
+                            speed+= 2;
+                            m.setVisible(false);
+                        }
+                    }
+                    
+                    if (vm.markers.every(m => m.found) && vm.win == false){
+                        vm.win = true,
+                        audio2.play();
+                        setTimeout(() => {
+                            name = prompt(`You have found all the site!!! (${vm.step} steps taken to complete)\nPlease enter your name : `) || 'Anonymous';
+                            refScore.doc().set({
+                                name: name,
+                                score: vm.step
+                            });
+                        }, 1000);
+                    }
+
+                }
+            },
+            mounted() {
+                
+                $(document).keydown(e => {
+                    if(vm.win) return;
+
+                    vm.step++;
+
+                    switch(e.key){
+                        case 'ArrowLeft'  : vm.move(-1, 0); break;
+                        case 'ArrowRight' : vm.move(+1, 0); break;
+                        case 'ArrowUp'    : vm.move(0, -1); break;
+                        case 'ArrowDown'  : vm.move(0, +1); break;
+                    }
+                });
+            },created(){
+                ref.get().then(querySnapshot => {
+                    const documents = querySnapshot.docs.map(doc => doc.data())
+
+                    vm.mks = documents;
+                    
+                    for(i = 0; i < vm.mks.length; i++){
+                        mark = {lat: vm.mks[i].position.lat, lng: vm.mks[i].position.lng}
+                        addMarker(vm.mks[i].name, mark);
+                    }
+                })
+            }
+        });
+
+        // Google Maps --------------------------------------------------------
+        const gm = google.maps; 
+
+        const center = new gm.LatLng(3.154234, 101.709534);
+
+        const map = new gm.Map($('#map')[0], {
+            center,
+            zoom: 18,
+            disableDefaultUI: true,
+            clickableIcons: false,
+            gestureHandling: 'none'
+        });
+
+        const panel = $('#panel')[0];
+        map.controls[gm.ControlPosition.TOP_LEFT].push(panel);
+
+        const player = new gm.Marker({
+            position: center,
+            map,
+            icon: `image/player${Math.floor(Math.random() * 2 + 1) }.gif`,
+            animation: gm.Animation.DROP
+        });
+
+        const sw = gm.geometry.spherical.computeOffset(center, 2000, 225);
+        const ne = gm.geometry.spherical.computeOffset(center, 2000, 45);
+        const bounds = new gm.LatLngBounds(sw, ne);
+        const rect = new gm.Rectangle({
+            map,
+            bounds,
+            strokeColor: 'red',
+            strokeWeight: 10,
+            fillOpacity: 0,
+        })
+
+        function addMarker(name, position) {
+            const mark = ['blue', 'red', 'green', 'orange', 'purple', 'yellow'];
+            let rand = Math.floor(Math.random() * mark.length);
+
+            let m = new gm.Marker({
+                map,
+                label: name,
+                position,
+                icon: `image/m/${mark[rand]}.png`,
+                distance: 100,
+                found: false
+            });
+
+            vm.markers.push(m);
+            vm.move(0,0);
+        }
+    </script>
+</body>
+</html>
